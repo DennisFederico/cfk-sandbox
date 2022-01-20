@@ -1,0 +1,7 @@
+{
+  "kafka_client": "kafka_client-secret",
+  "devuser": "dev-password",
+  "dfederico": "dennis-secret",  
+  "james": "james-secret",
+  "c3": "c3-secret"
+}

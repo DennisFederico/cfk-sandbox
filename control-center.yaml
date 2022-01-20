@@ -1,0 +1,72 @@
+apiVersion: platform.confluent.io/v1beta1
+kind: ControlCenter
+metadata:
+  name: controlcenter
+  namespace: confluent
+spec:
+  license:
+    globalLicense: true
+  configOverrides:
+    server:
+      - confluent.metrics.reporter.topic.retention.ms=86400000
+      - confluent.metrics.reporter.topic.retention.bytes=522752000     
+      - confluent.controlcenter.internal.topics.retention.ms=86400000 
+    jvm:
+      - "-XX:+UseG1GC"
+      - "-Xmx4000M"
+      - "-Xms4000M"
+  replicas: 1
+  podTemplate:
+    probe:
+      liveness:
+        periodSeconds: 10
+        failureThreshold: 5
+        timeoutSeconds: 500
+    # resources:
+    #   requests:
+    #     memory: "6Gi"
+    #     cpu: "2000m"
+  tls:
+    secretRef: tls-c3
+  authorization:
+    type: rbac
+  image:
+    application: confluentinc/cp-enterprise-control-center:7.0.1
+    init: confluentinc/confluent-init-container:2.2.0-1
+  dataVolumeCapacity: 50Gi
+  externalAccess:
+    type: loadBalancer
+    loadBalancer:
+      domain: dfederico.zone
+      prefix: controlcenter
+  dependencies:
+    kafka:
+      bootstrapEndpoint: kafka.confluent.svc.cluster.local:9071
+      authentication:
+        type: mtls
+      tls:
+        enabled: true
+    mds:
+      endpoint: https://kafka.confluent.svc.cluster.local:8090
+      tokenKeyPair:
+        secretRef: mds-token
+      authentication:
+        type: bearer
+        bearer:
+          secretRef: c3-mds-client
+      tls:
+        enabled: true
+    schemaRegistry:
+      url: https://schemaregistry.confluent.svc.cluster.local:8081
+      tls:
+        enabled: true
+    connect:
+      - name: connect
+        url:  https://connect.confluent.svc.cluster.local:8083
+        tls:
+          enabled: true
+    ksqldb:
+      - name: ksqldb
+        url:  https://ksqldb.confluent.svc.cluster.local:8088
+        tls:
+          enabled: true
