@@ -1,2 +1,0 @@
-username=cn=mds,dc=dfederico-confluent,dc=com
-password=mds-secret

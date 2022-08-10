@@ -1,0 +1,31 @@
+{
+  "CN": "internal.confluent.svc.cluster.local",
+  "hosts": [
+    "zookeeper.confluent.svc.cluster.local",
+    "zookeeper-0.confluent.svc.cluster.local",
+    "kafka.confluent.svc.cluster.local",
+    "kafka-0.confluent.svc.cluster.local",
+    "kafka-1.confluent.svc.cluster.local",
+    "kafka-2.confluent.svc.cluster.local",
+    "schemaregistry.confluent.svc.cluster.local",
+    "schemaregistry-0.confluent.svc.cluster.local",
+    "connect.confluent.svc.cluster.local",
+    "connect-0.confluent.svc.cluster.local",
+    "connect-1.confluent.svc.cluster.local",
+    "ksqldb.confluent.svc.cluster.local",
+    "ksqldb-0.confluent.svc.cluster.local",
+    "controlcenter.confluent.svc.cluster.local",
+    "controlcenter-0.confluent.svc.cluster.local"
+  ],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "Universe",
+      "ST": "Pangea",
+      "L": "Earth"
+    }
+  ]
+}
