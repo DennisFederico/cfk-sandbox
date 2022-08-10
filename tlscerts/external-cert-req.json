@@ -1,5 +1,5 @@
 {
-  "CN": "external.confluent.acme.com",
+  "CN": "*.confluent.acme.com",
   "hosts": [
     "kafka-bootstrap.confluent.acme.com",
     "kafka-0.confluent.acme.com",

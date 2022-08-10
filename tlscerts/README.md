@@ -1,21 +1,46 @@
-# Self-signed Certificates
-This were prepared using cfssl (Cloud Flare SSL) tools, a wrapper over openssl to simplify its usage, thus `openssl`must be installed too.
+# TLS Certificates
 
-## Basic Preparation and CA Certificates
+This folders provide an opinionated way to create self-signed certificates that can be used for the exercises that require them.
 
-### Create "generated" directory
+## Requirements
+
+- Openssl
+- [cfssl](https://cfssl.org/) (CloudFlare's SSL toolkit)
+
 ```bash
-$ mkdir generated
+sudo apt install golang-cfssl 
 ```
 
-### Install CFSSL
+## Self-signed CAs Cert and Key
+
+Pre-create two Certificate Authorities one for the K8s Cluster (Internal) and one to generate the certificates "external" to K8s cluster.
+
 ```bash
-$ sudo apt install golang-cfssl 
+$ openssl genrsa -out generated/InternalCAkey.pem 2048
+
+$ openssl req -x509 -new -nodes \
+  -key generated/InternalCAkey.pem \
+  -days 365 \
+  -out generated/InternalCAcert.pem \
+  -subj "/C=ES/ST=VLC/L=VLC/O=Demo/OU=GCP/CN=InternalCA"
+
+$ openssl genrsa -out generated/ExternalCAkey.pem 2048
+
+$ openssl req -x509 -new -nodes \
+  -key generated/ExternalCAkey.pem \
+  -days 365 \
+  -out generated/ExternalCAcert.pem \
+  -subj "/C=ES/ST=VLC/L=VLC/O=Demo/OU=GCP/CN=ExternalCA"
 ```
+
+## Prepare EXTERNAl Certificates
+
+These certificates are used by the exercise (ext-*).
 
 ### Create CFSSL Profiles
-A simple file with the usages for a certificate profile
--- cert-req-conf.json
+
+A simple file with the usages for a certificate profile `cert-req-conf.json`
+
 ```json
 {
     "signing": {
@@ -45,93 +70,17 @@ A simple file with the usages for a certificate profile
 }
 ```
 
-### INTERNAL and EXTERNAL CA Key
-```bash
-$ openssl genrsa -out generated/InternalCAkey.pem 2048
-$ openssl genrsa -out generated/ExternalCAkey.pem 2048
-```
-
-### INTERNAL and EXTERNAL CA Certificate
-```bash
-$ openssl req -x509 -new -nodes \
-  -key generated/InternalCAkey.pem \
-  -days 365 \
-  -out generated/InternalCAcert.pem \
-  -subj "/C=ES/ST=VLC/L=VLC/O=Demo/OU=GCP/CN=InternalCA"
-
-$ openssl req -x509 -new -nodes \
-  -key generated/ExternalCAkey.pem \
-  -days 365 \
-  -out generated/ExternalCAcert.pem \
-  -subj "/C=ES/ST=VLC/L=VLC/O=Demo/OU=GCP/CN=ExternalCA"
-```
-
-## (Option 1) Auto-Generated INTERNAL Certificates
-[Documentation](https://docs.confluent.io/operator/current/co-network-encryption.html#auto-generated-tls-certificates)
-
-```bash
-$ kubectl create secret tls internal-ca \
-  --cert generated/InternalCAcert.pem \
-  --key generated/InternalCAkey.pem
-```
-
-## (Option 2) User-Provided INTERNAL Servers Certificates
-Take into account the [SAN naming](https://docs.confluent.io/operator/current/co-network-encryption.html#define-san) for provided certificates
-
 ### Create Server Request
-A file with the CN and [SAN](https://docs.confluent.io/operator/current/co-network-encryption.html#define-san)s for the certificate
-```json
-{
-  "CN": "internal.confluent.svc.cluster.local",
-  "hosts": [
-    "zookeeper.confluent.svc.cluster.local",
-    "zookeeper-0.confluent.svc.cluster.local",
-    "kafka.confluent.svc.cluster.local",
-    "kafka-0.confluent.svc.cluster.local",
-    "kafka-1.confluent.svc.cluster.local",
-    "kafka-2.confluent.svc.cluster.local",
-    "schemaregistry.confluent.svc.cluster.local",
-    "schemaregistry-0.confluent.svc.cluster.local",
-    "connect.confluent.svc.cluster.local",
-    "connect-0.confluent.svc.cluster.local",
-    "connect-1.confluent.svc.cluster.local",
-    "ksqldb.confluent.svc.cluster.local",
-    "ksqldb-0.confluent.svc.cluster.local",
-    "controlcenter.confluent.svc.cluster.local",
-    "controlcenter-0.confluent.svc.cluster.local"
-  ],
-  "key": {
-    "algo": "rsa",
-    "size": 2048
-  },
-  "names": [
-    {
-      "C": "Universe",
-      "ST": "Pangea",
-      "L": "Earth"
-    }
-  ]
-}
-```
 
-### Generate the INTERNAL Server Certificate
-```bash
-$ cfssl gencert -ca=generated/InternalCAcert.pem \
-    -ca-key=generated/InternalCAkey.pem \
-    -config=cert-req-conf.json \
-    -profile=server internal-cert-req.json \
-    | cfssljson -bare generated/internalServer
-```
+For make things easier we will use a single certificate for all the external services.
 
-## User-Provided EXTERNAL Servers Certificates
+Create a defining the CN and [SANs](https://docs.confluent.io/operator/current/co-network-encryption.html#define-san)s for the certificate
 
-### Create Server Request
-A file with the CN and [SAN](https://docs.confluent.io/operator/current/co-network-encryption.html#define-san)s for the certificate "external"
-
+Example `external-cert-req.json`
 
 ```json
 {
-  "CN": "external.confluent.acme.com",
+  "CN": "*.confluent.acme.com",
   "hosts": [
     "kafka-bootstrap.confluent.acme.com",
     "kafka-0.confluent.acme.com",
@@ -156,7 +105,8 @@ A file with the CN and [SAN](https://docs.confluent.io/operator/current/co-netwo
 }
 ```
 
-### Generate the INTERNAL Server Certificate
+### Generate the EXTERNAL Certificate and Key
+
 ```bash
 $ cfssl gencert -ca=generated/ExternalCAcert.pem \
     -ca-key=generated/ExternalCAkey.pem \
@@ -165,11 +115,24 @@ $ cfssl gencert -ca=generated/ExternalCAcert.pem \
     | cfssljson -bare generated/externalServer
 ```
 
+## INTERNAL Certificate
 
-## MDS Credentials
-```
+We will rely on [CFK Certificate autogeneration](https://docs.confluent.io/operator/current/co-network-encryption.html#auto-generated-tls-certificates). To make this work we need to provide the signing CA Cert and Key is a secret for CFK, by default this secret should be called `ca-pair-sslcerts` of Type `tls`
+
+It is advisable to create a Secret RD to manage this secret
+
 ```bash
-### We need to provide a key pair (private/public) for MDS to generate tokens
-$ openssl genrsa -out mds-priv-key.pem 2048
-$ openssl rsa -in mds-priv-key.pem -out PEM -pubout -out mds-pub-key.pem
+kubectl create secret tls ca-pair-sslcerts \
+--cert=generated/InternalCAcert.pem \
+--key=generated/InternalCAkey.pem \
+-n confluent --dry-run=client -output yaml > ca-pair-sslcerts.yaml
+
+kubectl apply -f ca-pair-sslcerts.yaml
+```
+
+## MDS Token signing Cert/Key
+
+```bash
+openssl genrsa -out mds-priv-key.pem 2048
+openssl rsa -in mds-priv-key.pem -out PEM -pubout -out mds-pub-key.pem
 ```
