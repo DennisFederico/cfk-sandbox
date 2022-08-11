@@ -1,4 +1,4 @@
-# No TLS and No Auth
+# (K8s Internal) No TLS and No Auth
 
 This is the simplest of the examples, where the Platform will be deployed without TLS (on-the-wire encryption) nor user authentication.
 
@@ -26,7 +26,7 @@ kubectl logs -f producer-app
 kubectl logs -f consumer-app
 ```
 
-To tear down the app run the code below, but you can leave it running will you test Confluent Control Center (C3)
+To tear down the app run the code below, but you can leave it running until you test Confluent Control Center (C3) below
 
 ```bash
 kubectl delete -f test-kafka-app.yaml
@@ -37,7 +37,7 @@ kubectl delete -f test-kafka-app.yaml
 This is a simple check to confirm the REST endpoint works
 
 ```bash
-kubectl exec -it kafka-0 -- curl -k https://schemaregistry.confluent.svc.cluster.local:8081/schemas/types
+kubectl exec -it kafka-0 -- curl http://schemaregistry.confluent.svc.cluster.local:8081/schemas/types
 ```
 
 ## Test Connect
@@ -45,7 +45,7 @@ kubectl exec -it kafka-0 -- curl -k https://schemaregistry.confluent.svc.cluster
 This is a simple check to confirm the REST endpoint works
 
 ```bash
-kubectl exec -it kafka-0 -- curl -k https://connect.confluent.svc.cluster.local:8083/
+kubectl exec -it kafka-0 -- curl http://connect.confluent.svc.cluster.local:8083/
 ```
 
 ## Test ksqlDB
@@ -53,7 +53,7 @@ kubectl exec -it kafka-0 -- curl -k https://connect.confluent.svc.cluster.local:
 This is a simple check to confirm the REST endpoint works
 
 ```bash
-kubectl exec -it kafka-0 -- curl -k https://ksqldb.confluent.svc.cluster.local:8088/info
+kubectl exec -it kafka-0 -- curl http://ksqldb.confluent.svc.cluster.local:8088/info
 ```
 
 ## Test Confluent Control Center (C3)
@@ -73,8 +73,34 @@ kubectl port-forward controlcenter-0 9021:9021 -n confluent
 ## Open your browser and navigate to http://localhost:9021
 ```
 
+If you have not tear down the producer application, you should see the topic and its content.
+
+### Test C3/SR/ksqlDB
+
+Use the following queries to test Schema Registry and ksqldb from within C3
+
+```sql
+CREATE STREAM users  (id INTEGER KEY, gender STRING, name STRING, age INTEGER) WITH (kafka_topic='users', partitions=1, value_format='AVRO');
+```
+
+```sql
+INSERT INTO users (id, gender, name, age) VALUES (0, 'female', 'sarah', 42);
+INSERT INTO users (id, gender, name, age) VALUES (1, 'male', 'john', 28);
+INSERT INTO users (id, gender, name, age) VALUES (42, 'female', 'jessica', 70);
+```
+
+**NOTE:** Push Queries will seem "hanged" and will not work since push queries need to open a web socket connection from ksqldb from your browser, and ksqldb is not reachable from the outside in this exercise, the query remains just for completness.
+
+But you can still check the `users` topic content and it's assigned schema in the `Topics` sections on the left side of C3 UI.
+
+```sql
+-- Make sure to set auto.offset.reset=earliest
+SELECT id, gender, name, age FROM users WHERE age<65 EMIT CHANGES;
+-- You should get 2 records
+```
+
 ## Tear down the platform
 
-```
+```bash
 kubectl delete -f cp-platform.yaml
 ```

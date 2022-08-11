@@ -1,11 +1,11 @@
+---
 apiVersion: v1
+data:
+  kafka.properties: Ym9vdHN0cmFwLnNlcnZlcnM9a2Fma2EuY29uZmx1ZW50LnN2Yy5jbHVzdGVyLmxvY2FsOjkwNzEKc2VjdXJpdHkucHJvdG9jb2w9U1NMCnNzbC50cnVzdHN0b3JlLmxvY2F0aW9uPS9tbnQvc3NsY2VydHMvdHJ1c3RzdG9yZS5qa3MKc3NsLnRydXN0c3RvcmUucGFzc3dvcmQ9bXlzdG9yZXBhc3N3b3Jk
 kind: Secret
 metadata:
-  name: kafka-app-config
+  name: kafka-client-tls-properties
   namespace: confluent
-type: Opaque
-data:
-  kafka.properties: Ym9vdHN0cmFwLnNlcnZlcnM9a2Fma2EuY29uZmx1ZW50LnN2Yy5jbHVzdGVyLmxvY2FsOjkwNzEKc2VjdXJpdHkucHJvdG9jb2w9UExBSU5URVhU
 ---
 apiVersion: platform.confluent.io/v1beta1
 kind: KafkaTopic
@@ -44,6 +44,8 @@ spec:
     volumeMounts:
       - name: kafka-properties
         mountPath: /mnt
+      - name: kafka-generated-ssl
+        mountPath: /mnt/sslcerts
     resources:
       limits:
         memory: 512Mi
@@ -53,7 +55,10 @@ spec:
   volumes:
     - name: kafka-properties
       secret:
-        secretName: kafka-app-config
+        secretName: kafka-client-tls-properties
+    - name: kafka-generated-ssl
+      secret:
+        secretName: kafka-generated-jks
 ---
 apiVersion: v1
 kind: Pod
@@ -73,12 +78,16 @@ spec:
       kafka-console-consumer \
         --bootstrap-server kafka.confluent.svc.cluster.local:9071 \
         --consumer.config /mnt/kafka.properties \
+        --property print.partition=true \
+        --property print.offset=true \
         --topic app-topic \
         --from-beginning \
         --timeout-ms 30000
     volumeMounts:
-        - name: kafka-properties
-          mountPath: /mnt
+      - name: kafka-properties
+        mountPath: /mnt
+      - name: kafka-generated-ssl
+        mountPath: /mnt/sslcerts
     resources:
       limits:
         memory: 512Mi
@@ -88,5 +97,7 @@ spec:
   volumes:
     - name: kafka-properties
       secret:
-        secretName: kafka-app-config
-status: {}
+        secretName: kafka-client-tls-properties
+    - name: kafka-generated-ssl
+      secret:
+        secretName: kafka-generated-jks

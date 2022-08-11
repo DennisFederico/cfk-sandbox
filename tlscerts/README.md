@@ -33,7 +33,7 @@ $ openssl req -x509 -new -nodes \
   -subj "/C=ES/ST=VLC/L=VLC/O=Demo/OU=GCP/CN=ExternalCA"
 ```
 
-## Prepare EXTERNAl Certificates
+## Prepare EXTERNAL Certificates
 
 These certificates are used by the exercise (ext-*).
 

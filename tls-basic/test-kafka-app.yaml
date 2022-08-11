@@ -1,0 +1,108 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kafka-app-config
+  namespace: confluent
+  labels:
+    component: app-config
+type: Opaque
+data:
+  kafka.properties: Ym9vdHN0cmFwLnNlcnZlcnM9a2Fma2EuY29uZmx1ZW50LnN2Yy5jbHVzdGVyLmxvY2FsOjkwNzEKc2VjdXJpdHkucHJvdG9jb2w9U0FTTF9TU0wKc2FzbC5tZWNoYW5pc209UExBSU4Kc2FzbC5qYWFzLmNvbmZpZz1vcmcuYXBhY2hlLmthZmthLmNvbW1vbi5zZWN1cml0eS5wbGFpbi5QbGFpbkxvZ2luTW9kdWxlIHJlcXVpcmVkIHVzZXJuYW1lPSJhZG1pbiIgcGFzc3dvcmQ9ImFkbWluLXNlY3JldCI7CnNzbC50cnVzdHN0b3JlLmxvY2F0aW9uPS9tbnQvc3NsY2VydHMvdHJ1c3RzdG9yZS5qa3MKc3NsLnRydXN0c3RvcmUucGFzc3dvcmQ9bXlzdG9yZXBhc3N3b3JkYm9vdHN0cmFwLnNlcnZlcnM9a2Fma2EuY29uZmx1ZW50LnN2Yy5jbHVzdGVyLmxvY2FsOjkwNzEKc2VjdXJpdHkucHJvdG9jb2w9U0FTTF9TU0wKc2FzbC5tZWNoYW5pc209UExBSU4Kc2FzbC5qYWFzLmNvbmZpZz1vcmcuYXBhY2hlLmthZmthLmNvbW1vbi5zZWN1cml0eS5wbGFpbi5QbGFpbkxvZ2luTW9kdWxlIHJlcXVpcmVkIHVzZXJuYW1lPSJhZG1pbiIgcGFzc3dvcmQ9ImFkbWluLXNlY3JldCI7CnNzbC50cnVzdHN0b3JlLmxvY2F0aW9uPS9tbnQvc3NsY2VydHMvdHJ1c3RzdG9yZS5qa3MKc3NsLnRydXN0c3RvcmUucGFzc3dvcmQ9bXlzdG9yZXBhc3N3b3Jk
+---
+apiVersion: platform.confluent.io/v1beta1
+kind: KafkaTopic
+metadata:
+  name: app-topic
+  namespace: confluent
+  labels:
+    component: app-topic
+spec:
+  replicas: 3
+  partitionCount: 3
+  configs:
+    cleanup.policy: "delete"
+    min.insync.replicas: "1"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: producer-app
+  namespace: confluent
+  labels:
+    component: producer-app
+spec:
+  containers:
+  - image: confluentinc/cp-kafka:7.2.0 
+    name: producer-app
+    command:
+    - /bin/sh
+    - -c
+    - |
+      kafka-producer-perf-test \
+        --topic app-topic  \
+        --record-size 64 \
+        --throughput 5 \
+        --producer-props bootstrap.servers=kafka.confluent.svc.cluster.local:9071 \
+        --producer.config /mnt/kafka.properties \
+        --num-records 10000
+    volumeMounts:
+      - name: kafka-properties
+        mountPath: /mnt
+      - name: kafka-ssl
+        mountPath: /mnt/sslcerts
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 500m
+  dnsPolicy: ClusterFirst
+  restartPolicy: Never
+  volumes:
+    - name: kafka-properties
+      secret:
+        secretName: kafka-app-config
+    - name: kafka-ssl
+      secret:
+        secretName: kafka-generated-jks
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: consumer-app
+  namespace: confluent  
+  labels:
+    component: consumer-app  
+spec:
+  containers:
+  - image: confluentinc/cp-kafka:7.2.0 
+    name: consumer-app
+    command:
+    - /bin/sh
+    - -c
+    - |
+      kafka-console-consumer \
+        --bootstrap-server kafka.confluent.svc.cluster.local:9071 \
+        --consumer.config /mnt/kafka.properties \
+        --property print.partition=true \
+        --property print.offset=true \
+        --topic app-topic \
+        --from-beginning \
+        --timeout-ms 30000
+    volumeMounts:
+        - name: kafka-properties
+          mountPath: /mnt
+        - name: kafka-ssl
+          mountPath: /mnt/sslcerts
+    resources:
+      limits:
+        memory: 512Mi
+        cpu: 500m
+  dnsPolicy: ClusterFirst
+  restartPolicy: Never
+  volumes:
+    - name: kafka-properties
+      secret:
+        secretName: kafka-app-config
+    - name: kafka-ssl
+      secret:
+        secretName: kafka-generated-jks

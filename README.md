@@ -2,9 +2,9 @@
 
 This repository comprise a few examples of simple deployments using CKF.
 
-- [no-tls](no-tls-no-auth/) - Most basic setup without Authentication and no TLS (Encryption)
-- [tls-only](tls-only/) - No Authentication, "internal" TLS encryption (self-signed & auto genereated certs)
-- [basic-tls](basic-tls/) - Basic/Plain (username & password) Authentication for all services, using "internal" TLS encryption (self-signed & auto generated certs)
+- [notls-noauth](notls-noauth/) - Most basic setup without Authentication and no TLS (Encryption)
+- [tls-noauth](tls-noauth/) - No Authentication, "internal" TLS encryption (self-signed & auto genereated certs)
+- [tls-basic](tls-basic/) - Basic/Plain (username & password) Authentication for all services, using "internal" TLS encryption (self-signed & auto generated certs)
 - [ext-basic-tls](ext-basic-tls/) - Basic/Plain (username & password) Authentication, "internal" TLS encryption, "external" provided certs via Ingress (SR, Connect, ksqldb & C3) and LB for Kafka
 - [ext-rbac-tls](ext-rbac-tls/) - RABC Authorization and "external" provided certs, Includes an "embedded" LDAP deployment
   
