@@ -1,0 +1,6 @@
+bootstrap.servers=bootstrap.kafka.confluent.acme.com:9092
+security.protocol=SASL_SSL
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="app1" password="app1-secret";
+ssl.truststore.location=TRUSTORE_LOCATION
+ssl.truststore.password=changeme

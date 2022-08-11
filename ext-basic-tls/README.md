@@ -1,6 +1,8 @@
 # TLS with External Re-Encrypt and Basic/Plain Auth
 
-This exercise adds an `externalAccess` to the external Kafka Listener (port 9092) from the previous exercise [tls-basic](../tls-basic/) and steps to install an Ingress controller with tules to access HTTP-based service from outside the Kubernetes cluster (SR, Connect, ksqlDB and C3), at the same time the Ingress Controller will terminate SSL and re-encrypt responses with a "provided" certificate that should include the DNS of the services in the SAN. Authentication for the external listener will be enforced from a different secret, this is useful to separate internal service users.
+This exercise adds an `externalAccess` to the external Kafka Listener (port 9092) of type `LoadBalancer` from the previous exercise [tls-basic](../tls-basic/) and steps to install an Ingress controller with tules to access HTTP-based service from outside the Kubernetes cluster (SR, Connect, ksqlDB and C3), at the same time the Ingress Controller will terminate SSL and re-encrypt responses with a "provided" certificate that should include the DNS of the services in the SAN. Authentication for the external listener will be enforced from a different secret, this is useful to separate internal service users.
+
+**NOTE:** We could also had use an `externalAccess` of type [`staticForHostBasedRouting`](https://docs.confluent.io/operator/current/co-statichostbased.html#configure-host-based-static-access-to-confluent-components) and route external Kafka access throught the same Ingress controller like the rest of the components.
 
 The change on the Kafka CRD looks like this:
 
@@ -152,10 +154,15 @@ helm upgrade  --install ingress-nginx ingress-nginx/ingress-nginx -n confluent
 
 ## Create Bootstraps for the Services to expose via the Ingress
 
-Each service with multiple instances would need to be bootstraped for the ingress to redirect to any of them. In this case we will create "bootstraps" for Schema Registry, Kafka Connect and ksqlDB.
-See. [cp-bootstraps.yaml](cp-bootstraps.yaml)
+Each service with multiple instances would need to be bootstraped for the ingress to redirect to any of them. CFK already creates `ClusterIP` "bootstrap" services for each component with appropiate selectors.
 
-TODO
+```bash
+kubectl describe svc schemaregistry
+kubectl describe svc connect
+kubectl describe svc ksqldb
+```
+
+*NOTE: If by any change the above services are not available or you need a different configuration for these bootstrap that need to be "routed" by the Ingress, see or apply [cp-bootstraps.yaml](cp-bootstraps.yaml)
 
 ## Deploy Ingress Rules
 
@@ -163,7 +170,29 @@ Ingress rules example file [cp-ingress-reencrypt.yaml](cp-ingress-reencrypt.yaml
 
 ## Update/Add DNS Entries
 
-TODO for etc/hosts
+Once the services are deployed and the IP of the Ingress Controller is available, update your DNS records, you can do this locally via `etc/hosts` file.
+
+To fetch the IP of the Ingress controller...
+
+```bash
+INGRESS_IP=kubectl get svc ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[*].ip}'
+```
+
+you can use a similar approach for Kakfa or simple check the `EXTERNAL-IP` column when doing `kubectl get svc`
+
+This an example of how the entries in your `etc/hosts` could look like
+
+```text
+<INGRESS_IP> schemaregistry.services.confluent.acme.com
+<INGRESS_IP> connect.services.confluent.acme.com
+<INGRESS_IP> ksqldb.services.confluent.acme.com
+<INGRESS_IP> controlcenter.services.confluent.acme.com
+
+<KAFKA_BOOTSTRAP_IP> bootstrap.kafka.confluent.acme.com
+<KAFKA_BROKER-0_IP>  broker0.kafka.confluent.acme.com
+<KAFKA_BROKER-1_IP>  broker1.kafka.confluent.acme.com
+<KAFKA_BROKER-2_IP>  broker2.kafka.confluent.acme.com
+```
 
 ---
 
@@ -171,41 +200,67 @@ For each service you can perform the following tests...
 
 ## Test External Kafka TLS Cert
 
-TODO
-Find external IP and add to the DNS 
-`k get svc kafka-bootstrap-lb -o jsonpath='{.status.loadBalancer.ingress[*].ip}'`
-Add each broker to the DNS too
+Find external IP of any of the broker or the bootstrap, and cCheck the exposed certificates with `openssl`
+
 ```bash
-BOOTSTRAP_IP=$(k get svc kafka-bootstrap-lb -o jsonpath='{.status.loadBalancer.ingress[*].ip}')
+BOOTSTRAP_IP=$(kubectl get svc kafka-bootstrap-lb -o jsonpath='{.status.loadBalancer.ingress[*].ip}')
 
-$ openssl s_client -connect $BOOTSTRAP_IP:9092 </dev/null 2>/dev/null | openssl x509 -noout -text | grep Issuer:
-
-$ openssl s_client -connect $BOOTSTRAP_IP:9092 </dev/null 2>/dev/null | openssl x509 -noout -text | grep DNS:
+openssl s_client -connect $BOOTSTRAP_IP:9092 </dev/null 2>/dev/null | \
+ openssl x509 -noout -text | \
+ grep -E '(Issuer: | DNS:)'
 ```
-
 
 ## Test Kafka Produce and Consume
 
-TODO
+To consumer and produce to Kafka from outside the K8s cluster, using the external listener, we can use `kafka-topics`, `kafka-producer-perf-test` and `kafka-console-consumer` from the command line.
 
-Descriptor file `test-kafka-app.yaml` creates a topic named `app-topic`, a secret named `kafka-client-tls-properties` with property file to connect internally (to K8s) to kafka (see [internal-client.properties](internal-client.properties)), and two pods one that will produce 10.000 records in 1 second interval and another pod that will consume from the same topic.
+We first need to setup the properties file to connect and the truststore
 
 ```bash
-kubectl apply -f test-kafka-app.yaml
+# Import the CA pem file into a jks for trustore
+keytool -noprompt -import -alias ca \
+  -keystore ../tlscerts/generated/truststore.jks \
+  -deststorepass changeme \
+  -file ../tlscerts/generated/ExternalCAcert.pem
+
+# Prepare the properties file with the newly created JKS (absolute path)
+sed "s|TRUSTORE_LOCATION|$(ls $PWD/../tlscerts/generated/truststore.jks)|g" external-client.properties.tmpl > external-client.properties
+
 ```
 
-You can follow the logs of each pod once running to see the producer and consumer apps in action
-
 ```bash
-kubectl logs -f producer-app
-
-kubectl logs -f consumer-app
+## CREATE A TOPIC
+kafka-topics --bootstrap-server bootstrap.kafka.confluent.acme.com:9092 \
+  --command-config external-client.properties \
+  --create \
+  --topic app-topic \
+  --replication-factor 3 \
+  --partitions 1
 ```
 
-To tear down the app run the code below, but you can leave it running until you test Confluent Control Center (C3) below
+Generate data in one terminal window
 
 ```bash
-kubectl delete -f test-kafka-app.yaml
+kafka-producer-perf-test \
+  --topic app-topic  \
+  --record-size 64 \
+  --throughput 5 \
+  --producer-props bootstrap.servers=bootstrap.kafka.confluent.acme.com:9092 \
+  --producer.config external-client.properties \
+  --num-records 1000
+```
+
+Consume data in another terminal window
+
+```bash
+kafka-console-consumer \
+  --bootstrap-server bootstrap.kafka.confluent.acme.com:9092 \
+  --consumer.config external-client.properties \
+  --property print.partition=true \
+  --property print.offset=true \
+  --topic app-topic \
+  --from-beginning \
+  --timeout-ms 30000
 ```
 
 ## Test SR (Schema Registry)
