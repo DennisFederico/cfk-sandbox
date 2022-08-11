@@ -1,0 +1,59 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cp-ingress-reencrypt
+  namespace: confluent
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+      - schemaregistry.services.confluent.acme.com        
+      - connect.services.confluent.acme.com
+      - ksqldb.services.confluent.acme.com
+      - controlcenter.services.confluent.acme.com
+      secretName: services-external-tls
+  rules:
+    - host: schemaregistry.services.confluent.acme.com
+      http:
+        paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: schemaregistry
+              port:
+                number: 8081
+    - host: connect.services.confluent.acme.com
+      http:
+        paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: connect
+              port:
+                number: 8083
+    - host: ksqldb.services.confluent.acme.com
+      http:
+        paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: ksqldb
+              port:
+                number: 8088
+    - host: controlcenter.services.confluent.acme.com
+      http:
+        paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: controlcenter
+              port:
+                number: 9021

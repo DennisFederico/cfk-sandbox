@@ -65,7 +65,7 @@ The secrets need are summarized in the following table, additional columns have 
 
 | Secret | Secret filename | Purpose | Content |
 |---|---|---|---|
-| kafka-internal-users | plain-users.json | Allowed users to Kafka | [file](secrets/kafka-internal-users.json) | 
+| kafka-internal-users | plain-users.json | Allowed users to Kafka | [file](secrets/kafka-internal-users.json) |
 | basic-mr-kafka-secret | plain.txt | user/pass to Kafka for metrics | [file](secrets/basic-mr-kafka-secret.txt) |
 | basic-users-sr | basic.txt | Allowed users to SR | [file](secrets/basic-users-sr-withrole.txt) |
 | basic-users-connect | basic.txt | Allowed users to Connect | [file](secrets/basic-users-connect.txt) |
@@ -80,7 +80,7 @@ The secrets need are summarized in the following table, additional columns have 
 | basic-c3-connect-secret | plain.txt | user-pass to Connect for C3 | [file](secrets/basic-c3-connect-secret.txt) |
 | basic-c3-ksqldb-secret | plain.txt | user-pass to ksqldb for C3 | [file](secrets/basic-c3-ksqldb-secret.txt) |
 
-Using the above table you can crate the needed secrets with the command below
+Using the above table you can create the needed secrets with the command below
 
 ```bash
 kubectl create secret generic <secret> \

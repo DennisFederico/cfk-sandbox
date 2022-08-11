@@ -1,0 +1,21 @@
+{
+  "CN": "external.kafka.confluent.acme.com",
+  "hosts": [
+    "bootstrap.kafka.confluent.acme.com",
+    "broker-0.kafka.confluent.acme.com",
+    "broker-1.kafka.confluent.acme.com",
+    "broker-2.kafka.confluent.acme.com",
+    "*.kafka.confluent.acme.com"
+  ],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "Universe",
+      "ST": "Pangea",
+      "L": "Earth"
+    }
+  ]
+}

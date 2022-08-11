@@ -1,0 +1,23 @@
+{
+  "CN": "external.services.confluent.acme.com",
+  "hosts": [
+    "schemaregistry.services.confluent.acme.com",
+    "*.schemaregistry.services.confluent.acme.com",
+    "connect.services.confluent.acme.com",
+    "*.connect.services.confluent.acme.com",
+    "ksqldb.services.confluent.acme.com",
+    "*.ksqldb.services.confluent.acme.com",
+    "controlcenter.services.confluent.acme.com"
+  ],
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "Universe",
+      "ST": "Pangea",
+      "L": "Earth"
+    }
+  ]
+}

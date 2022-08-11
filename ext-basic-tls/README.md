@@ -1,186 +1,177 @@
-# CREATE SECRET
+# TLS with External Re-Encrypt and Basic/Plain Auth
+
+This exercise adds an `externalAccess` to the external Kafka Listener (port 9092) from the previous exercise [tls-basic](../tls-basic/) and steps to install an Ingress controller with tules to access HTTP-based service from outside the Kubernetes cluster (SR, Connect, ksqlDB and C3), at the same time the Ingress Controller will terminate SSL and re-encrypt responses with a "provided" certificate that should include the DNS of the services in the SAN. Authentication for the external listener will be enforced from a different secret, this is useful to separate internal service users.
+
+The change on the Kafka CRD looks like this:
+
+```yaml
+spec:
+  ...
+  listeners:
+    ...
+    external:
+      authentication:
+        type: plain
+        jaasConfig:
+          secretRef: kafka-external-users
+      tls:
+        enabled: true
+        secretRef: external-tls
+      externalAccess:
+        type: loadBalancer
+        loadBalancer:
+          domain: confluent.acme.com
+          brokerPrefix: kafka
+          bootstrapPrefix: kafka-bootstrap
+```
+
+**NOTE:** We have also commented the authentication configuration of the ksqldb CRD, and configured the `advertisedUrl` value for the ksqldb dependencie of ***C3*** CDR, the later will allow the browser to make the web socker request (when doing push queries) throught the Ingress. Basic auth for ksqldb from C3 is still new and credentials are not properly sent to ksqldb for push queries.
+
+```yaml
+# C3 CRD
+spec:
+  ...
+  dependencies:
+    ...
+    ksqldb:
+      - name: ksqldb        
+        url: https://ksqldb.confluent.svc.cluster.local:8088
+        advertisedUrl: https://ksqldb.confluent.acme.com
+        tls:
+          ...          
+```
+
+---
+
+## TLS Internal
+
+We will use the same approach as in [tls-noauth](../tls-noauth/) excercise, we will create a CA signer certificate and key, and let CFK create the certificates for each service.
 
 ```bash
-echo '---' > secrets.yaml
+mkdir generated
 
-kubectl create secret generic basic-users-sr \
- --from-file=basic.txt=basic-users-sr-withrole.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
+openssl genrsa -out generated/InternalCAkey.pem 2048
 
-echo '---' >> secrets.yaml
+openssl req -x509 -new -nodes \
+  -key generated/InternalCAkey.pem \
+  -days 365 \
+  -out generated/InternalCAcert.pem \
+  -subj "/C=ES/ST=VLC/L=VLC/O=Demo/OU=GCP/CN=InternalCA"
 
-kubectl create secret generic basic-users-connect \
- --from-file=basic.txt=basic-users-connect.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-users-ksqldb \
- --from-file=basic.txt=basic-users-ksqldb-withrole.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-users-c3 \
- --from-file=basic.txt=basic-users-c3-withrole.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-c3-sr-secret \
- --from-file=basic.txt=basic-c3-sr-secret.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-c3-connect-secret \
- --from-file=basic.txt=basic-c3-connect-secret.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-c3-ksqldb-secret \
- --from-file=basic.txt=basic-c3-ksqldb-secret.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-c3-kafka-secret \
- --from-file=plain.txt=basic-c3-kafka-secret.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic kafka-internal-users-jaas \
- --from-file=plain-users.json=kafka-internal-users.json \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic kafka-external-users-jaas \
- --from-file=plain-users.json=kafka-external-users.json \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-mr-kafka-secret \
- --from-file=plain.txt=basic-mr-kafka-secret.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-sr-kafka-secret \
- --from-file=plain.txt=basic-sr-kafka-secret.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-connect-kafka-secret \
- --from-file=plain.txt=basic-connect-kafka-secret.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
-
-echo '---' >> secrets.yaml
-
-kubectl create secret generic basic-ksqldb-kafka-secret \
- --from-file=plain.txt=basic-ksqldb-kafka-secret.txt \
- --namespace confluent \
- --dry-run=client \
- --output yaml >> secrets.yaml
+kubectl create secret tls ca-pair-sslcerts \
+--cert=generated/InternalCAcert.pem \
+--key=generated/InternalCAkey.pem \
+--namespace confluent
 ```
 
-## Additional EXTERNA TLS secret
-```
-kubectl create secret generic external-tls \
-  --from-file=fullchain.pem=../tlscerts/generated/externalServer.pem \
-  --from-file=cacerts.pem=../tlscerts/generated/ExternalCAcert.pem \
-  --from-file=privkey.pem=../tlscerts/generated/externalServer-key.pem
+---
+
+## TLS External
+
+CFK autogenerated certificates SANs for Kafka will always be for the internal DNS of the K8s cluster `<namespace>.svc.cluster.local`, you need to provide your own certificate if you are required to resolve the service to a different DNS, the certificate must contain SANs for the brokers and the bootstrap service, this is also specified when using `loadBalancer` externalAccess.
+
+Refer to the [Prepare EXTERNAL Certificates](../tlscerts/README.md)) in [tlscerts](../tlscerts/) README.md, you should end with two secrets, one holding certificate and key for Kafka external, and another for the certificate and key of the rest of the services.
+
+```bash
+kubectl create secret generic kafka-external-tls \
+  --from-file=fullchain.pem=../tlscerts/generated/externalKafka.pem \
+  --from-file=privkey.pem=../tlscerts/generated/externalKafka-key.pem \
+  --from-file=cacerts.pem=../tlscerts/generated/ExternalCAcert.pem
 ```
 
+```bash
+kubectl create secret tls services-external-tls \
+  --cert=../tlscerts/generated/externalServices.pem \
+  --key=../tlscerts/generated/externalServices-key.pem
+```
 
-# Add the Kubernetes NginX Helm repo and update the repo
+---
+
+## Service Credentials (Secrets)
+
+For each service we will prepare a secret with a list of allowed users, including "service" user, also secrets with the login/password that each service will use to authenticate among them.
+The secrets need are summarized in the following table, additional columns have been provided to help setting up the commands to create them.
+
+This is the same approach from the previous exercise [tls-basic](../tls-basic/README.md), just adding `kafka-external-users` secret.
+
+| Secret | Secret filename | Purpose | Content |
+|---|---|---|---|
+| kafka-internal-users | plain-users.json | Allowed users to Kafka from internal listener | [file](secrets/kafka-internal-users.json) |
+| kafka-external-users | plain-users.json | Allowed users to Kafka from external listener | [file](secrets/kafka-external-users.json) |
+| basic-mr-kafka-secret | plain.txt | user/pass to Kafka for metrics | [file](secrets/basic-mr-kafka-secret.txt) |
+| basic-users-sr | basic.txt | Allowed users to SR | [file](secrets/basic-users-sr-withrole.txt) |
+| basic-users-connect | basic.txt | Allowed users to Connect | [file](secrets/basic-users-connect.txt) |
+| basic-users-ksqldb | basic.txt | Allowed users to ksqldb | [file](secrets/basic-users-ksqldb-withrole.txt) |
+| basic-users-c3 | basic.txt | Allowed users to C3 | [file](secrets/basic-users-c3-withrole.txt) |
+| basic-sr-kafka-secret | plain.txt | user-pass to Kafka for SR | [file](secrets/basic-sr-kafka-secret.txt) |
+| basic-connect-kafka-secret | plain.txt | user-pass to Kafka for Connect | [file](secrets/basic-connect-kafka-secret.txt) |
+| basic-ksqldb-kafka-secret | plain.txt | user-pass to Kafka for ksqldb | [file](secrets/basic-ksqldb-kafka-secret.txt) |
+| basic-ksqldb-sr-secret | plain.txt | user-pass to SR for ksqldb | [file](secrets/basic-ksqldb-sr-secret.txt) |
+| basic-c3-kafka-secret | plain.txt | user-pass to Kafka for C3 | [file](secrets/basic-c3-kafka-secret.txt) |
+| basic-c3-sr-secret | plain.txt | user-pass to SR for C3 | [file](secrets/basic-c3-sr-secret.txt) |
+| basic-c3-connect-secret | plain.txt | user-pass to Connect for C3 | [file](secrets/basic-c3-connect-secret.txt) |
+| basic-c3-ksqldb-secret | plain.txt | user-pass to ksqldb for C3 | [file](secrets/basic-c3-ksqldb-secret.txt) |
+
+Using the above table you can create the needed secrets with the command below
+
+```bash
+kubectl create secret generic <secret> \
+ --from-file=<secret_filename>=<file> \
+ --namespace confluent
+```
+
+For this exercise the secret contents are available in the [secrets](secrets/) folder and for "deployment" convenience a `secret.yml` has been prepared nesting a similar command like the above. See [secrest/README.md](secrets/README.md)
+
+```bash
+kubectl apply -f secrets/secrets.yml
+```
+
+---
+
+## Deploy the platform
+
+To deploy the platform run:
+
+```bash
+kubectl apply -f cp-platform.yaml
+```
+
+---
+
+## Install NGINX Ingress Controller
+
+NGINX Ingress Controller for Kubernetes can be installed using HELM, it must be installed in the same namespace of the services to be exposed.
+
 ```bash
 helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
 helm repo update
 helm upgrade  --install ingress-nginx ingress-nginx/ingress-nginx -n confluent
 ```
 
-# Install the Nginx controller
-```bash
-helm upgrade  --install ingress-nginx ingress-nginx/ingress-nginx -n confluent
-```
+**NOTE:** Make sure that the chart version is at least `4.2.1` and App version `1.3.0` (using `helm ls` command)
 
-An example Ingress that makes use of the controller:
-  apiVersion: networking.k8s.io/v1
-  kind: Ingress
-  metadata:
-    name: example
-    namespace: foo
-  spec:
-    ingressClassName: nginx
-    rules:
-      - host: www.example.com
-        http:
-          paths:
-            - pathType: Prefix
-              backend:
-                service:
-                  name: exampleService
-                  port:
-                    number: 80
-              path: /
-    # This section is only required if TLS is to be enabled for the Ingress
-    tls:
-      - hosts:
-        - www.example.com
-        secretName: example-tls
+## Create Bootstraps for the Services to expose via the Ingress
 
-If TLS is enabled for the Ingress, a Secret containing the certificate and key must also be provided:
+Each service with multiple instances would need to be bootstraped for the ingress to redirect to any of them. In this case we will create "bootstraps" for Schema Registry, Kafka Connect and ksqlDB.
+See. [cp-bootstraps.yaml](cp-bootstraps.yaml)
 
-  apiVersion: v1
-  kind: Secret
-  metadata:
-    name: example-tls
-    namespace: foo
-  data:
-    tls.crt: <base64 encoded cert>
-    tls.key: <base64 encoded key>
-  type: kubernetes.io/tls
+TODO
 
-```bash
-kubectl create secret tls ingress-tls \
-  --cert=../tlscerts/generated/externalServer.pem \
-  --key=../tlscerts/generated/externalServer-key.pem \
-  --namespace confluent
-```
+## Deploy Ingress Rules
 
-# CHECK External TLS (KAFKA)
+Ingress rules example file [cp-ingress-reencrypt.yaml](cp-ingress-reencrypt.yaml) define rules for each service and "dns" based "routing", at the same time, the `tls` definition indicates that TLS should be terminated for the listed domains and "re-encrypted" using the certificate indicated in the `spec.tls.secretName`.
 
+## Update/Add DNS Entries
+
+TODO for etc/hosts
+
+---
+
+For each service you can perform the following tests...
+
+## Test External Kafka TLS Cert
+
+TODO
 Find external IP and add to the DNS 
 `k get svc kafka-bootstrap-lb -o jsonpath='{.status.loadBalancer.ingress[*].ip}'`
 Add each broker to the DNS too
@@ -192,34 +183,124 @@ $ openssl s_client -connect $BOOTSTRAP_IP:9092 </dev/null 2>/dev/null | openssl 
 $ openssl s_client -connect $BOOTSTRAP_IP:9092 </dev/null 2>/dev/null | openssl x509 -noout -text | grep DNS:
 ```
 
-# CHECK External TLS (SR)
 
-Find external IP and add to the DNS 
-`k get svc schemaregistry-bootstrap-lb -o jsonpath='{.status.loadBalancer.ingress[*].ip}'`
-Add each broker to the DNS too
-```bash
-BOOTSTRAP_IP=$(k get svc schemaregistry-bootstrap-lb -o jsonpath='{.status.loadBalancer.ingress[*].ip}')
+## Test Kafka Produce and Consume
 
-$ openssl s_client -connect $BOOTSTRAP_IP:443 </dev/null 2>/dev/null | openssl x509 -noout -text | grep Issuer:
+TODO
 
-$ openssl s_client -connect $BOOTSTRAP_IP:443 </dev/null 2>/dev/null | openssl x509 -noout -text | grep DNS:
-```
-
-
-
-# TEST SCHEMA REGISTRY
+Descriptor file `test-kafka-app.yaml` creates a topic named `app-topic`, a secret named `kafka-client-tls-properties` with property file to connect internally (to K8s) to kafka (see [internal-client.properties](internal-client.properties)), and two pods one that will produce 10.000 records in 1 second interval and another pod that will consume from the same topic.
 
 ```bash
-kubectl exec -it kafka-0 -- curl -k -u c3-user:c3-secret https://schemaregistry.confluent.svc.cluster.local:8081/schemas/types
+kubectl apply -f test-kafka-app.yaml
 ```
 
-# TEST CONNECT
+You can follow the logs of each pod once running to see the producer and consumer apps in action
+
 ```bash
-kubectl exec -it kafka-0 -- curl -k -u c3-user:c3-secret https://connect.confluent.svc.cluster.local:8083/
+kubectl logs -f producer-app
+
+kubectl logs -f consumer-app
 ```
 
-# TEST KSQLDB
+To tear down the app run the code below, but you can leave it running until you test Confluent Control Center (C3) below
+
 ```bash
-kubectl exec -it kafka-0 -- curl -k -u c3-user:c3-secret https://ksqldb.confluent.svc.cluster.local:8088/info
+kubectl delete -f test-kafka-app.yaml
 ```
 
+## Test SR (Schema Registry)
+
+This is a simple check to confirm the REST endpoint works
+
+```bash
+## CHECK EXTERNAL CERTIFICATE
+# Since the ingress works as a reverse proxy, we need an additional argument with the hostname used in the ingress rules... we can connect to the ingress IP instead of the hostname
+openssl s_client -connect schemaregistry.services.confluent.acme.com:443 \
+  -servername schemaregistry.services.confluent.acme.com </dev/null 2>/dev/null | \
+  openssl x509 -noout -text | \
+  grep -E '(Issuer: | DNS:)'
+
+## CHECK THE SERVICE - NO USER
+# use -k if you have not added the CA to the trusted chain of yout host
+curl -k https://schemaregistry.services.confluent.acme.com/schemas/types
+
+## CHECK THE SERVICE - AUTHENTICATING
+# use -k if you have not added the CA to the trusted chain of yout host
+curl -k -u sr-user:sr-password https://schemaregistry.services.confluent.acme.com/schemas/types
+```
+
+## Test Connect
+
+This is a simple check to confirm the REST endpoint works
+
+```bash
+## CHECK EXTERNAL CERTIFICATE
+# Since the ingress works as a reverse proxy, we need an additional argument with the hostname used in the ingress rules... we can connect to the ingress IP instead of the hostname
+openssl s_client -connect connect.services.confluent.acme.com:443 \
+  -servername connect.services.confluent.acme.com </dev/null 2>/dev/null | \
+  openssl x509 -noout -text | \
+  grep -E '(Issuer: | DNS:)'
+
+## CHECK THE SERVICE - NO USER
+# use -k if you have not added the CA to the trusted chain of yout host
+curl -k https://connect.services.confluent.acme.com
+
+## CHECK THE SERVICE - AUTHENTICATING
+# use -k if you have not added the CA to the trusted chain of yout host
+curl -k -u connect-user:connect-password https://connect.services.confluent.acme.com
+```
+
+## Test ksqlDB
+
+This is a simple check to confirm the REST endpoint works
+
+```bash
+## CHECK EXTERNAL CERTIFICATE
+# Since the ingress works as a reverse proxy, we need an additional argument with the hostname used in the ingress rules... we can connect to the ingress IP instead of the hostname
+openssl s_client -connect ksqldb.services.confluent.acme.com:443 \
+  -servername ksqldb.services.confluent.acme.com </dev/null 2>/dev/null | \
+  openssl x509 -noout -text | \
+  grep -E '(Issuer: | DNS:)'
+
+## CHECK THE SERVICE - NO USER - We have disabled basic auth in this exercise
+# use -k if you have not added the CA to the trusted chain of yout host
+curl -k https://ksqldb.services.confluent.acme.com/info
+```
+
+## Test Confluent Control Center (C3)
+
+Just navigate to [https://controlcenter.services.confluent.acme.com/](https://controlcenter.services.confluent.acme.com/), you will be challenged with a logging, use `admin-user` / `admin-password`
+
+**NOTE:** *When using a self-signed certificates, your browser will display a `NET::ERR_CERT_AUTHORITY_INVALID` error message, dependening on the browser there are mechanisms to override and accept the risk of insecure browsing and proceed to C3 page, optionally, you can import the CA cert in your SO/browser certificate trust chain, and restart the browser.
+
+If you have not tear down the producer application, you should see the topic and its content.
+
+### Test C3/SR/ksqlDB
+
+Use the following queries to test Schema Registry and ksqldb from within C3
+
+```sql
+CREATE STREAM users  (id INTEGER KEY, gender STRING, name STRING, age INTEGER) WITH (kafka_topic='users', partitions=1, value_format='AVRO');
+```
+
+```sql
+INSERT INTO users (id, gender, name, age) VALUES (0, 'female', 'sarah', 42);
+INSERT INTO users (id, gender, name, age) VALUES (1, 'male', 'john', 28);
+INSERT INTO users (id, gender, name, age) VALUES (42, 'female', 'jessica', 70);
+```
+
+**NOTE:** Since we disabled athenticate for ksqldb, the push query should be work properly, as the socket would be created via the ingress (assung `advertisedUrl` for ksql dependency was set in controlcenter CRD)
+
+```sql
+-- Make sure to set auto.offset.reset=earliest
+SELECT id, gender, name, age FROM users WHERE age<65 EMIT CHANGES;
+-- You should get 2 records
+```
+
+## Tear down the platform
+
+```bash
+kubectl delete -f cp-platform.yaml
+
+kubectl delete -f secrets/secrets.yaml
+```

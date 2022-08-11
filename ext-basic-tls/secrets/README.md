@@ -13,6 +13,14 @@ kubectl create secret generic kafka-internal-users \
 
 echo '---' >> secrets.yaml
 
+kubectl create secret generic kafka-external-users \
+ --from-file=plain-users.json=kafka-external-users.json \
+ --namespace confluent \
+ --dry-run=client \
+ --output yaml >> secrets.yaml
+
+echo '---' >> secrets.yaml
+
 kubectl create secret generic basic-mr-kafka-secret \
  --from-file=plain.txt=basic-mr-kafka-secret.txt \
  --namespace confluent \
