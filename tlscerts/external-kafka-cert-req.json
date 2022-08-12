@@ -2,9 +2,9 @@
   "CN": "external.kafka.confluent.acme.com",
   "hosts": [
     "bootstrap.kafka.confluent.acme.com",
-    "broker-0.kafka.confluent.acme.com",
-    "broker-1.kafka.confluent.acme.com",
-    "broker-2.kafka.confluent.acme.com",
+    "broker0.kafka.confluent.acme.com",
+    "broker1.kafka.confluent.acme.com",
+    "broker2.kafka.confluent.acme.com",
     "*.kafka.confluent.acme.com"
   ],
   "key": {

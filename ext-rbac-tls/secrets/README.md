@@ -84,6 +84,14 @@ kubectl create secret generic ksql-mds-creds \
 
 echo '---' >> secrets.yaml
 
+kubectl create secret generic c3-mds-creds \
+ --from-file=bearer.txt=c3-user-creds.txt \
+ --namespace confluent \
+ --dry-run=client \
+ --output yaml >> secrets.yaml
+
+echo '---' >> secrets.yaml
+
 kubectl create secret generic connect-sr-basic \
  --from-file=basic.txt=connect-user-creds.txt \
  --namespace confluent \
@@ -98,6 +106,29 @@ kubectl create secret generic ksql-sr-basic \
  --dry-run=client \
  --output yaml >> secrets.yaml
 
+echo '---' >> secrets.yaml
+
+kubectl create secret generic c3-sr-basic \
+ --from-file=basic.txt=c3-user-creds.txt \
+ --namespace confluent \
+ --dry-run=client \
+ --output yaml >> secrets.yaml
+
+echo '---' >> secrets.yaml
+
+kubectl create secret generic c3-connect-basic \
+ --from-file=basic.txt=c3-user-creds.txt \
+ --namespace confluent \
+ --dry-run=client \
+ --output yaml >> secrets.yaml
+
+echo '---' >> secrets.yaml
+
+kubectl create secret generic c3-ksql-basic \
+ --from-file=basic.txt=c3-user-creds.txt \
+ --namespace confluent \
+ --dry-run=client \
+ --output yaml >> secrets.yaml
 
 ```
 

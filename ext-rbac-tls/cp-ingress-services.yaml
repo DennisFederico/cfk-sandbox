@@ -2,7 +2,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: cp-ingress-reencrypt
+  name: cp-ingress-services
   namespace: confluent
   annotations:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -15,6 +15,7 @@ spec:
       - connect.services.confluent.acme.com
       - ksqldb.services.confluent.acme.com
       - controlcenter.services.confluent.acme.com
+      - mds.services.confluent.acme.com
       secretName: services-external-tls
   rules:
     - host: schemaregistry.services.confluent.acme.com
@@ -57,3 +58,13 @@ spec:
               name: controlcenter
               port:
                 number: 9021
+    - host: mds.services.confluent.acme.com
+      http:
+        paths:
+        - pathType: Prefix
+          path: /
+          backend:
+            service:
+              name: mds-bootstrap
+              port:
+                number: 8090                
