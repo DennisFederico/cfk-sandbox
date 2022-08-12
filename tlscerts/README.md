@@ -189,10 +189,3 @@ kubectl create secret tls services-external-tls \
   --key=generated/externalServices-key.pem \
   --namespace confluent
 ```
-
-## MDS Token signing Cert/Key
-
-```bash
-openssl genrsa -out mds-priv-key.pem 2048
-openssl rsa -in mds-priv-key.pem -out PEM -pubout -out mds-pub-key.pem
-```
