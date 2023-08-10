@@ -600,17 +600,17 @@ curl -k -u ksql:ksql-secret https://ksqldb.services.confluent.acme.com/info
 
 ### Test Confluent Control Center (C3)
 
-TODO LDAP credentials and RBAC
-
 Just navigate to [https://controlcenter.services.confluent.acme.com/](https://controlcenter.services.confluent.acme.com/), you will be challenged with a logging, use `c3` / `c3-secret`
 
 **NOTE:** *When using a self-signed certificates, your browser will display a `NET::ERR_CERT_AUTHORITY_INVALID` error message, dependening on the browser there are mechanisms to override and accept the risk of insecure browsing and proceed to C3 page, optionally, you can import the CA cert in your SO/browser certificate trust chain, and restart the browser.
 
 C3 used might not have all the privileges to view all the services, you must create the Rolebindigs or log with a user with more privileges
 
+**NOTE:** Apply the Rolebindings in [cp-testadmin-rolebinding.yaml](cp-testadmin-rolebinding.yaml) to give SystemAdmin to all the components to user `testadmin` password: `testadmin`
+
 ### Test C3/SR/ksqlDB
 
-Use the following queries to test Schema Registry and ksqldb from within C3
+Use the following queries to test Schema Registry and ksqldb from within C3 using `testadmin` user.
 
 ```sql
 CREATE STREAM users  (id INTEGER KEY, gender STRING, name STRING, age INTEGER) WITH (kafka_topic='users', partitions=1, value_format='AVRO');

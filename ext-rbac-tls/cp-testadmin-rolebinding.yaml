@@ -1,0 +1,49 @@
+apiVersion: platform.confluent.io/v1beta1
+kind: ConfluentRolebinding
+metadata:
+  name: rb-testadmin-kafka
+  namespace: confluent
+spec:
+  principal:
+    type: user
+    name: testadmin
+  role: SystemAdmin
+---
+apiVersion: platform.confluent.io/v1beta1
+kind: ConfluentRolebinding
+metadata:
+  name: rb-testadmin-sr
+  namespace: confluent
+spec:
+  principal:
+    type: user 
+    name: testadmin
+  clustersScopeByIds:
+    schemaRegistryClusterId: id_schemaregistry_confluent
+  role: SystemAdmin
+---
+apiVersion: platform.confluent.io/v1beta1
+kind: ConfluentRolebinding
+metadata:
+  name: rb-testadmin-connect
+  namespace: confluent
+spec:
+  principal:
+    type: user 
+    name: testadmin
+  clustersScopeByIds:
+    connectClusterId: confluent.connect
+  role: SystemAdmin
+---
+apiVersion: platform.confluent.io/v1beta1
+kind: ConfluentRolebinding
+metadata:
+  name: rb-testadmin-ksqldb
+  namespace: confluent
+spec:
+  principal:
+    type: user 
+    name: testadmin
+  clustersScopeByIds:
+    ksqlClusterId: confluent.ksqldb_
+  role: SystemAdmin

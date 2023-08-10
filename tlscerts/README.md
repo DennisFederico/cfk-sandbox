@@ -37,7 +37,7 @@ It is advisable to create a Secret RD to manage this secret
 kubectl create secret tls ca-pair-sslcerts \
 --cert=generated/InternalCAcert.pem \
 --key=generated/InternalCAkey.pem \
--n confluent --dry-run=client -output yaml > ca-pair-sslcerts.yaml
+-n confluent --dry-run=client --output yaml > ca-pair-sslcerts.yaml
 
 kubectl apply -f ca-pair-sslcerts.yaml
 ```

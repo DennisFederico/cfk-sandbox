@@ -2,7 +2,7 @@
 
 This exercise has a similar result to [notls-noauth](../notls-noauth/), but we will be encrypting comminication using TLS, and leveraging CFK to auto generate the required certificates of each service.
 
-For each Resource in the deploying manifest [`cp-platform.yaml`](cp-platform.yaml), not the TLS entries
+For each Resource in the deploying manifest [`cp-platform.yaml`](cp-platform.yaml), note the TLS entries
 
 ```yaml
 tls:
